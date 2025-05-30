@@ -10,7 +10,7 @@ public class Node extends Thread {
 		 REQUESTING,     // Orange - Sent REQUEST messages, waiting for replies
 		 IN_CS,          // Red - Currently in critical section
 		}
-	
+
     private static int uidCounter = 0;
     private static final List<Node> all_nodes = new ArrayList<>();
     private static Graph graph = null;
@@ -18,11 +18,10 @@ public class Node extends Thread {
     private final int nodeId;
     private Point position;
     private Color color;
-    private final Random rand = new Random();
     private volatile NodeState currentState = NodeState.IDLE;
-    private long logicalClock = 0;
+    private long clock = 0;
     private long requestTimestamp = -1;
-    
+
     // Ricart-Agrawala specific fields
     private final Set<Integer> pendingReplies = Collections.synchronizedSet(new HashSet<>());
     private final Queue<Integer> deferredReplies = new ArrayDeque<>();
@@ -30,16 +29,25 @@ public class Node extends Thread {
     private Node() {
         super("Node-" + uidCounter);
         this.nodeId = uidCounter++;
-        this.position = new Point(rand.nextInt(700) + 50, rand.nextInt(500) + 50);
+        this.position = generateNonOverlappingPosition();
         this.color = Color.GREEN;
 
         graph.repaint();
     }
-    
+
+    private static Point generateNonOverlappingPosition() {
+        Random r = new Random();
+        while (true) {
+            Point p = new Point(100 + r.nextInt(600), 100 + r.nextInt(400));
+            boolean overlaps = all().stream().anyMatch(n -> p.distance(n.position) < 70);
+            if (!overlaps) return p;
+        }
+    }
+
     public static List<Node> all() {
         return Collections.unmodifiableList(all_nodes);
     }
-    
+
     public static Node push(Graph graph) {
     	if (Node.graph == null) {Node.graph = graph;}
     	Node node = new Node();
@@ -82,7 +90,7 @@ public class Node extends Thread {
         this.color = color;
         graph.repaint();
     }
-    
+
     private synchronized Node get(int nodeId) {
 		return all_nodes.get(nodeId);
     }
@@ -91,7 +99,7 @@ public class Node extends Thread {
         if (currentState != NodeState.IDLE) return;
         
         currentState = NodeState.REQUESTING;
-        requestTimestamp = ++logicalClock;
+        requestTimestamp = ++clock;
         pendingReplies.clear();
         
         // Send REQUEST to all other nodes
@@ -105,7 +113,7 @@ public class Node extends Thread {
     }
 
     public synchronized void handleRequest(int fromNodeId, long timestamp) {
-        logicalClock = Math.max(logicalClock + 1, timestamp);
+        clock = Math.max(clock + 1, timestamp);
         
         boolean shouldReplyImmediately = true;
         
@@ -131,7 +139,7 @@ public class Node extends Thread {
             requester.handleReply(nodeId);
         }
     }
-    
+
     public synchronized void handleReply(int fromNodeId) {
         pendingReplies.remove(fromNodeId);
         
@@ -149,6 +157,7 @@ public class Node extends Thread {
         new Thread(() -> {
             try {
                 Thread.sleep(1000 + new Random().nextInt(4000)); // 1-5 seconds
+                if(isInterrupted()) {return;}
                 exitCriticalSection();
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();

@@ -82,6 +82,15 @@ public class Graph extends JPanel {
     }
    
     void addNode(ActionEvent e) {
+    	if(Node.all().size() >= 20) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "Max number of nodes added!",
+                    "Warning",
+                    JOptionPane.WARNING_MESSAGE
+                );
+    		return;
+    	}
         Node newNode = Node.push(this);
         
         for (Node other : Node.all()) {
@@ -92,9 +101,17 @@ public class Graph extends JPanel {
     }
 
     void removeNode(ActionEvent e) {
-        if (!Node.all().isEmpty()) {
-            Node removed = Node.pull();
-            Edge.remove(removed);
+        if (Node.all().isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    null,
+                    "No node to remove!",
+                    "Warning",
+                    JOptionPane.WARNING_MESSAGE
+                );
+        	return;
         }
+        Node removed = Node.pull();
+        Edge.remove(removed);
+        
     }
 }

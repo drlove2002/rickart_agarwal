@@ -3,56 +3,74 @@ package com.app;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.atomic.AtomicReference;
+
+import javax.swing.SwingUtilities;
 
 public class Node extends Thread {
-    private enum NodeState {
-        IDLE,           // Green - Not interested in CS
-        REQUESTING,     // Orange - Sent REQUEST messages, waiting for replies
-        IN_CS,          // Red - Currently in critical section
+    public enum NodeState {
+        IDLE(new Color(46, 204, 113)),           // Modern green
+        REQUESTING(new Color(241, 196, 15)),     // Modern yellow/orange  
+        IN_CS(new Color(231, 76, 60));           // Modern red
+        
+        private final Color color;
+        NodeState(Color color) { this.color = color; }
+        public Color getColor() { return color; }
     }
 
-    private static int uidCounter = 0;
-    private static final List<Node> all_nodes = new ArrayList<>();
-    private static Graph graph = null;
+    private static final AtomicInteger uidCounter = new AtomicInteger(0);
+    private static final List<Node> all_nodes = Collections.synchronizedList(new ArrayList<>());
+    private static volatile Graph graph = null;
 
     private final int nodeId;
-    private Point position;
-    private Color color;
-    private volatile NodeState currentState = NodeState.IDLE;
-    private long clock = 0;
-    private long requestTimestamp = -1;
+    private final Point position;
+    private final AtomicReference<NodeState> currentState = new AtomicReference<>(NodeState.IDLE);
+    private final AtomicLong clock = new AtomicLong(0);
+    private final AtomicLong requestTimestamp = new AtomicLong(-1);
 
-    // Ricart-Agrawala specific fields
-    private final Set<Integer> pendingReplies = Collections.synchronizedSet(new HashSet<>());
-    private final Queue<Integer> deferredReplies = new ArrayDeque<>();
+    // Thread-safe collections for Ricart-Agrawala
+    private final Set<Integer> pendingReplies = ConcurrentHashMap.newKeySet();
+    private final Queue<Integer> deferredReplies = new ConcurrentLinkedQueue<>();
 
     private Node() {
-        super("Node-" + uidCounter);
-        this.nodeId = uidCounter++;
+        super("Node-" + uidCounter.get());
+        this.nodeId = uidCounter.getAndIncrement();
         this.position = generateNonOverlappingPosition();
-        this.color = Color.GREEN;
         log("Node created with ID: " + nodeId);
     }
 
     private void log(String message) {
-        System.out.println("[Node-" + nodeId + "] " + message + " (State: " + currentState + ", Clock: " + clock + ")");
+        System.out.println(String.format("[Node-%d] %s (State: %s, Clock: %d)", 
+            nodeId, message, currentState.get(), clock.get()));
     }
 
     private static Point generateNonOverlappingPosition() {
         Random r = new Random();
-        while (true) {
-            Point p = new Point(100 + r.nextInt(600), 100 + r.nextInt(400));
-            boolean overlaps = all().stream().anyMatch(n -> p.distance(n.position) < 70);
+        int attempts = 0;
+        while (attempts < 100) { // Prevent infinite loop
+            Point p = new Point(120 + r.nextInt(560), 120 + r.nextInt(360));
+            boolean overlaps = all_nodes.stream()
+                .anyMatch(n -> p.distance(n.position) < 80);
             if (!overlaps) return p;
+            attempts++;
         }
+        // Fallback to grid position if random fails
+        int gridSize = (int) Math.ceil(Math.sqrt(uidCounter.get()));
+        int row = uidCounter.get() / gridSize;
+        int col = uidCounter.get() % gridSize;
+        return new Point(150 + col * 100, 150 + row * 100);
     }
 
     public static List<Node> all() {
-        return Collections.unmodifiableList(all_nodes);
+        return new ArrayList<>(all_nodes); // Return copy to avoid concurrent modification
     }
 
     public static Node push(Graph graph) {
-        if (Node.graph == null) {Node.graph = graph;}
+        if (Node.graph == null) { Node.graph = graph; }
         Node node = new Node();
         all_nodes.add(node);
         return node;
@@ -61,14 +79,11 @@ public class Node extends Thread {
     public static Node pull() {
         if (all_nodes.isEmpty()) return null;
         
-        Node.uidCounter--;
-        Node removed = all_nodes.removeLast();
+        Node removed = all_nodes.remove(all_nodes.size() - 1);
         removed.interrupt();
         
         // Clean up references to removed node
-        for (Node node : Node.all()) {
-            node.clear(removed);
-        }
+        all_nodes.forEach(node -> node.clear(removed));
         
         if (graph != null) {
             graph.repaint();
@@ -79,150 +94,126 @@ public class Node extends Thread {
     public void clear(Node removed) {
         int id = removed.getNodeId();
         pendingReplies.remove(id);
-        synchronized(deferredReplies) {
-            deferredReplies.remove(id);
-        }
+        deferredReplies.remove(id);
     }
 
-    public int getNodeId() {
-        return nodeId;
-    }
+    // Getters
+    public int getNodeId() { return nodeId; }
+    public Point getPosition() { return new Point(position); } // Return copy
+    public Color getColor() { return currentState.get().getColor(); }
 
-    public Point getPosition() {
-        return position;
-    }
-
-    public void setPosition(Point position) {
-        this.position = position;
-    }
-
-    public synchronized Color getColor() {
-        return color;
-    }
-
-    public synchronized void setColor(Color color) {
-        this.color = color;
-        if (graph != null) {
-            graph.repaint();
-        }
-    }
-
-    // FIXED: Find node by ID, not by index
-    private synchronized Node findNodeById(int nodeId) {
+    private Node findNodeById(int nodeId) {
         return all_nodes.stream()
                 .filter(node -> node.getNodeId() == nodeId)
                 .findFirst()
                 .orElse(null);
     }
 
-    private synchronized void requestCriticalSection() {
-        if (currentState != NodeState.IDLE) return;
+    private void requestCriticalSection() {
+        if (!currentState.compareAndSet(NodeState.IDLE, NodeState.REQUESTING)) {
+            return; // Already requesting or in CS
+        }
         
-        currentState = NodeState.REQUESTING;
-        requestTimestamp = ++clock;
+        long timestamp = clock.incrementAndGet();
+        requestTimestamp.set(timestamp);
         pendingReplies.clear();
         
-        log("Requesting Critical Section (timestamp: " + requestTimestamp + ")");
+        log("Requesting Critical Section (timestamp: " + timestamp + ")");
         
-        // Add all other nodes to pending replies BEFORE sending requests
-        synchronized(all_nodes) {
-            for (Node other : all_nodes) {
-                if (other != this) {
-                    pendingReplies.add(other.getNodeId());
-                }
-            }
-        }
+        // Get current snapshot of nodes
+        List<Node> currentNodes = all();
         
-        // Now send REQUEST to all other nodes
-        synchronized(all_nodes) {
-            for (Node other : all_nodes) {
-                if (other != this) {
-                    log("Sending REQUEST to Node-" + other.getNodeId());
-                    
-                    // Show visual request
-                    if (graph != null) {
-                        graph.showRequest(this, other);
-                    }
-                    
-                    other.handleRequest(nodeId, requestTimestamp);
-                }
-            }
-        }
-        updateColor();
+        // Add all other nodes to pending replies
+        currentNodes.stream()
+            .filter(node -> node != this)
+            .forEach(node -> pendingReplies.add(node.getNodeId()));
+        
+        // Send requests to all other nodes
+        currentNodes.stream()
+            .filter(node -> node != this)
+            .forEach(this::sendRequest);
+        
+        repaintGraph();
     }
 
-    public synchronized void handleRequest(int fromNodeId, long timestamp) {
-        clock = Math.max(clock + 1, timestamp);
+    private void sendRequest(Node other) {
+        log("Sending REQUEST to Node-" + other.getNodeId());
+        
+        if (graph != null) {
+            graph.showRequest(this, other);
+        }
+        
+        other.handleRequest(nodeId, requestTimestamp.get());
+    }
+
+    public void handleRequest(int fromNodeId, long timestamp) {
+        long newClock = Math.max(clock.get() + 1, timestamp);
+        clock.set(newClock);
+        
         log("Received REQUEST from Node-" + fromNodeId + " (timestamp: " + timestamp + ")");
         
+        NodeState state = currentState.get();
         boolean shouldReplyImmediately = true;
         
-        if (currentState == NodeState.REQUESTING) {
-            // Compare timestamps for priority (FIXED: proper comparison)
-            if (timestamp < requestTimestamp || 
-               (timestamp == requestTimestamp && fromNodeId < nodeId)) {
-                // Other has higher priority, reply immediately
-                log("Other node has higher priority (ts:" + timestamp + " vs " + requestTimestamp + "), replying immediately");
-                shouldReplyImmediately = true;
-                // Since we're giving up our request, reset to IDLE
-                currentState = NodeState.IDLE;
+        if (state == NodeState.REQUESTING) {
+            long myTimestamp = requestTimestamp.get();
+            // Higher priority = lower timestamp, or same timestamp with lower ID
+            if (timestamp < myTimestamp || (timestamp == myTimestamp && fromNodeId < nodeId)) {
+                log("Other node has higher priority, giving up my request");
+                // Give up our request
+                currentState.set(NodeState.IDLE);
                 pendingReplies.clear();
-                updateColor();
+                repaintGraph();
             } else {
-                // We have higher priority, defer reply
-                log("We have higher priority (ts:" + requestTimestamp + " vs " + timestamp + "), deferring reply");
+                log("We have higher priority, deferring reply");
                 shouldReplyImmediately = false;
-                synchronized(deferredReplies) {
-                    deferredReplies.offer(fromNodeId);
-                }
-            }
-        } else if (currentState == NodeState.IN_CS) {
-            // We're in CS, defer reply
-            log("Currently in CS, deferring reply");
-            shouldReplyImmediately = false;
-            synchronized(deferredReplies) {
                 deferredReplies.offer(fromNodeId);
             }
+        } else if (state == NodeState.IN_CS) {
+            log("Currently in CS, deferring reply");
+            shouldReplyImmediately = false;
+            deferredReplies.offer(fromNodeId);
         }
-        // If IDLE, always reply immediately (default case)
         
         if (shouldReplyImmediately) {
-            Node requester = findNodeById(fromNodeId);
-            if (requester != null) {
-                log("Sending REPLY to Node-" + fromNodeId);
-                
-                // Show visual reply
-                if (graph != null) {
-                    graph.showReply(this, requester);
-                }
-                
-                requester.handleReply(nodeId);
-            }
+            sendReply(fromNodeId);
         }
     }
 
-    public synchronized void handleReply(int fromNodeId) {
+    private void sendReply(int toNodeId) {
+        Node requester = findNodeById(toNodeId);
+        if (requester != null) {
+            log("Sending REPLY to Node-" + toNodeId);
+            
+            if (graph != null) {
+                graph.showReply(this, requester);
+            }
+            
+            requester.handleReply(nodeId);
+        }
+    }
+
+    public void handleReply(int fromNodeId) {
         log("Received REPLY from Node-" + fromNodeId);
         pendingReplies.remove(fromNodeId);
         
         log("Pending replies remaining: " + pendingReplies.size());
         
-        // If we have all replies, enter CS
-        if (pendingReplies.isEmpty() && currentState == NodeState.REQUESTING) {
+        if (pendingReplies.isEmpty() && currentState.get() == NodeState.REQUESTING) {
             log("All replies received, entering Critical Section");
             enterCriticalSection();
         }
     }
 
     private void enterCriticalSection() {
-        currentState = NodeState.IN_CS;
+        currentState.set(NodeState.IN_CS);
         log("ENTERED Critical Section");
-        updateColor();
+        repaintGraph();
         
-        // Stay in CS for balanced duration (shorter for better visualization)
+        // Use a separate thread for CS timing to avoid blocking
         new Thread(() -> {
             try {
-                int duration = 3000; // Fixed 3 seconds for predictable visualization
+                int duration = 2500 + new Random().nextInt(1500); // 2.5-4 seconds
                 log("Will stay in CS for " + duration + "ms");
                 Thread.sleep(duration);
                 
@@ -232,32 +223,20 @@ public class Node extends Thread {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
             }
-        }).start();
+        }, "CS-Timer-" + nodeId).start();
     }
     
-    private synchronized void exitCriticalSection() {
+    private void exitCriticalSection() {
         log("EXITING Critical Section");
-        currentState = NodeState.IDLE;
+        currentState.set(NodeState.IDLE);
         
         // Send all deferred replies
-        synchronized(deferredReplies) {
-            while (!deferredReplies.isEmpty()) {
-                int deferredNodeId = deferredReplies.poll();
-                Node deferredNode = findNodeById(deferredNodeId);
-                if (deferredNode != null) {
-                    log("Sending deferred REPLY to Node-" + deferredNodeId);
-                    
-                    // Show visual reply
-                    if (graph != null) {
-                        graph.showReply(this, deferredNode);
-                    }
-                    
-                    deferredNode.handleReply(nodeId);
-                }
-            }
+        Integer deferredNodeId;
+        while ((deferredNodeId = deferredReplies.poll()) != null) {
+            sendReply(deferredNodeId);
         }
         
-        updateColor();
+        repaintGraph();
         log("Critical Section EXIT complete");
     }
     
@@ -268,12 +247,12 @@ public class Node extends Thread {
         
         while (!isInterrupted()) {
             try {
-                // Balanced wait time for better visualization
-                int waitTime = 8000 + rand.nextInt(4000); // 8-12 seconds
+                // Variable wait time for more realistic behavior
+                int waitTime = 6000 + rand.nextInt(6000); // 6-12 seconds
                 Thread.sleep(waitTime);
                 
-                // 40% chance to request CS when idle
-                if (currentState == NodeState.IDLE && rand.nextDouble() < 0.4) {
+                // 35% chance to request CS when idle
+                if (currentState.get() == NodeState.IDLE && rand.nextDouble() < 0.35) {
                     log("Deciding to request Critical Section");
                     requestCriticalSection();
                 }
@@ -288,14 +267,9 @@ public class Node extends Thread {
         log("Node thread terminated");
     }
     
-    private void updateColor() {
-        Color newColor;
-        switch (currentState) {
-            case IDLE: newColor = Color.GREEN; break;
-            case REQUESTING: newColor = Color.ORANGE; break;
-            case IN_CS: newColor = Color.RED; break;
-            default: newColor = Color.GREEN;
+    private void repaintGraph() {
+        if (graph != null) {
+            SwingUtilities.invokeLater(() -> graph.repaint());
         }
-        setColor(newColor);
     }
 }

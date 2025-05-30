@@ -2,7 +2,7 @@ package com.app;
 
 import javax.swing.*;
 import java.awt.*;
-
+ 
 public class Main extends JFrame {
     private static final long serialVersionUID = 1L;
     private Graph graph = new Graph();

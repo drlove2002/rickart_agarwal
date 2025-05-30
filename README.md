@@ -2,7 +2,7 @@
 
 A Java Swing application that provides real-time visualization of the Ricart-Agrawala distributed mutual exclusion algorithm. This project demonstrates how nodes in a distributed system coordinate to ensure mutual exclusion when accessing critical sections.
 
-## ?? Project Overview
+## 🎯 Project Overview
 
 The Ricart-Agrawala algorithm is a distributed algorithm for mutual exclusion in distributed systems. This visualizer brings the algorithm to life by showing:
 
@@ -11,7 +11,7 @@ The Ricart-Agrawala algorithm is a distributed algorithm for mutual exclusion in
 - **Priority-based conflict resolution** using logical timestamps
 - **Interactive network topology** with dynamic node addition/removal
 
-## ? Key Features
+## ✨ Key Features
 
 ### Algorithm Implementation
 - **Complete Ricart-Agrawala Protocol**: Full implementation with logical timestamps and priority ordering
@@ -22,12 +22,12 @@ The Ricart-Agrawala algorithm is a distributed algorithm for mutual exclusion in
 ### Visual Interface
 - **Real-time Animation**: Live visualization of message passing between nodes
 - **Color-coded States**: 
-  - ?? **Green**: IDLE (available for requests)
-  - ?? **Orange**: REQUESTING (waiting for critical section access)
-  - ?? **Red**: IN_CS (currently in critical section)
+  - 🟢 **Green**: IDLE (available for requests)
+  - 🟡 **Orange**: REQUESTING (waiting for critical section access)
+  - 🔴 **Red**: IN_CS (currently in critical section)
 - **Message Visualization**:
-  - ?? **Blue Arrows**: REQUEST messages
-  - ?? **Green Arrows**: REPLY messages
+  - 🔵 **Blue Arrows**: REQUEST messages
+  - 🟢 **Green Arrows**: REPLY messages
 - **Network Statistics**: Real-time display of node counts and state distribution
 - **Interactive Legend**: Clear explanation of visual elements
 
@@ -36,7 +36,7 @@ The Ricart-Agrawala algorithm is a distributed algorithm for mutual exclusion in
 - **Automatic Positioning**: Smart node placement to avoid overlaps
 - **Console Logging**: Detailed algorithm execution logs for analysis
 
-## ??? Architecture
+## 🏗️ Architecture
 
 ### Core Components
 
@@ -67,7 +67,7 @@ The Ricart-Agrawala algorithm is a distributed algorithm for mutual exclusion in
 - Handles arrow positioning and styling
 - Ensures visual clarity with proper spacing and colors
 
-## ?? Getting Started
+## 🚀 Getting Started
 
 ### Prerequisites
 - Java 8 or higher
@@ -94,7 +94,7 @@ javac -d bin src/com/app/*.java
 java -cp bin com.app.Main
 ```
 
-## ?? How to Use
+## 🎮 How to Use
 
 ### Basic Operations
 1. **Launch** the application to see the empty network
@@ -127,7 +127,7 @@ The application provides detailed logging in the console:
 - Critical section entry/exit
 - Priority conflict resolution
 
-## ?? Algorithm Details
+## 🔬 Algorithm Details
 
 ### Ricart-Agrawala Protocol
 
@@ -139,12 +139,12 @@ The implementation follows the classic Ricart-Agrawala algorithm:
    - Waits for REPLY from all nodes
 
 2. **Reply Decision**:
-   - If receiving node is IDLE ? send REPLY immediately
-   - If receiving node is in CS ? defer REPLY
-   - If receiving node is REQUESTING ? compare timestamps:
-     - Lower timestamp has priority ? defer REPLY
-     - Higher timestamp ? send REPLY immediately
-     - Same timestamp ? lower node ID has priority
+   - If receiving node is IDLE → send REPLY immediately
+   - If receiving node is in CS → defer REPLY
+   - If receiving node is REQUESTING → compare timestamps:
+     - Lower timestamp has priority → defer REPLY
+     - Higher timestamp → send REPLY immediately
+     - Same timestamp → lower node ID has priority
 
 3. **Critical Section**:
    - Enter CS when all REPLYs received
@@ -158,7 +158,7 @@ The implementation follows the classic Ricart-Agrawala algorithm:
 - **Robust Error Handling**: Graceful handling of node removal during execution
 - **Visual Feedback**: Immediate UI updates for all state changes
 
-## ?? Technical Highlights
+## 🎨 Technical Highlights
 
 ### Performance Optimizations
 - Efficient collision detection for node positioning
@@ -178,7 +178,7 @@ The implementation follows the classic Ricart-Agrawala algorithm:
 - Consistent error handling and resource cleanup
 - Well-documented public interfaces
 
-## ?? Project Statistics
+## 📊 Project Statistics
 
 - **Total Classes**: 8 core classes
 - **Lines of Code**: ~1000+ lines
@@ -187,14 +187,14 @@ The implementation follows the classic Ricart-Agrawala algorithm:
 - **Message Types**: REQUEST, REPLY
 - **State Management**: Thread-safe concurrent operations
 
-## ?? Known Limitations
+## 🐛 Known Limitations
 
 - Maximum 12 nodes for optimal visualization performance
 - Fixed network topology (fully connected graph)
 - No network failure simulation
 - Console logging required for detailed analysis
 
-## ?? Future Enhancements
+## 🔮 Future Enhancements
 
 Potential improvements for extended versions:
 - **Network Partitioning**: Simulate network failures and partitions
@@ -203,11 +203,11 @@ Potential improvements for extended versions:
 - **Configurable Parameters**: Adjustable timing and probability settings
 - **Export Functionality**: Save visualization sequences or logs
 
-## ?? License
+## 📝 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
-## ?? Acknowledgments
+## 🙏 Acknowledgments
 
 - Based on the classic Ricart-Agrawala distributed mutual exclusion algorithm
 - Inspired by distributed systems coursework and research

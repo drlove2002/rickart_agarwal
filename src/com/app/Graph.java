@@ -2,43 +2,46 @@ package com.app;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.ActionEvent;
 import java.util.Collections;
 import java.util.List;
+
 
 public class Graph extends JPanel {
 	private static final long serialVersionUID = 1L;
 	private List<Node> nodes;
     private List<Edge> edges;
+    private SignalManager signalManager;
 
     public Graph(List<Node> nodes, List<Edge> edges) {
         this.nodes = nodes;
         this.edges = edges;
+        this.signalManager = new SignalManager();
         setPreferredSize(new Dimension(800, 600));
         setBackground(Color.WHITE);
     }
-
+    
     @Override
     protected void paintComponent(Graphics g) {
-        super.paintComponent(g);
+        super.paintComponent(g);  // clears the background
 
         Graphics2D g2d = (Graphics2D) g;
         g2d.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
 
-        // Thicker edge stroke
+        // 1. Draw all the edges (always gray)
         g2d.setStroke(new BasicStroke(3));
-
-        // Draw edges
+        g2d.setColor(Color.GRAY);
         for (Edge edge : edges) {
             Point p1 = edge.getFrom().getPosition();
             Point p2 = edge.getTo().getPosition();
-            g2d.setColor(edge.getColor());
             g2d.drawLine(p1.x, p1.y, p2.x, p2.y);
         }
 
-        // Bigger node labels
-        g2d.setFont(new Font("Arial", Font.BOLD, 18)); // Larger font size for IDs
+        // 2. Draw active signal arrows
+        drawSignalArrows(g2d);
 
-        // Draw nodes
+        // 3. Draw the nodes (circles with ID text)
+        g2d.setFont(new Font("Arial", Font.BOLD, 18));
         for (Node node : nodes) {
             Point pos = node.getPosition();
             g2d.setColor(node.getColor());
@@ -47,7 +50,7 @@ public class Graph extends JPanel {
             g2d.setColor(Color.BLACK);
             g2d.drawOval(pos.x - 30, pos.y - 30, 60, 60);
 
-            // Draw ID centered
+            // Draw node ID centered
             String id = String.valueOf(node.getNodeId());
             FontMetrics fm = g2d.getFontMetrics();
             int textWidth = fm.stringWidth(id);
@@ -56,24 +59,52 @@ public class Graph extends JPanel {
         }
     }
 
-    /**
-     * Change color of the edge between two nodes
-     */
-    public void colorEdge(Node a, Node b, Color c) {
-        for (Edge edge : edges) {
-            if (edge.connects(a, b)) {
-                edge.setColor(c);
-                break;
-            }
+
+    // Replace activeSignals with signalManager.getActiveSignals()
+    private void drawSignalArrows(Graphics2D g2d) {
+        g2d.setStroke(new BasicStroke(4));
+        for (SignalInfo signal : signalManager.getActiveSignals().values()) {
+            Point from = signal.from.getPosition();
+            Point to = signal.to.getPosition();
+            g2d.setColor(signal.signalColor);
+            ArrowDrawer.drawArrow(g2d, from, to);
         }
-        refresh();
+    }
+
+    // Delegate comm methods
+    public void showRequest(Node from, Node to) {
+        signalManager.showRequest(from, to);
+        repaint();
+    }
+
+    public void showReply(Node from, Node to) {
+        signalManager.showReply(from, to);
+        repaint();
+    }
+
+    public void resetCommunication(Node from, Node to) {
+        signalManager.resetCommunication(from, to);
+        repaint();
     }
     
     public List<Node> getNodes() {
         return Collections.unmodifiableList(nodes);
     }
-    
-    public void refresh() {
-        repaint();
+
+    void addNode(ActionEvent e) {
+        Node newNode = new Node(this);
+        for (Node existing : nodes) {
+            edges.add(new Edge(existing, newNode));
+        }
+        nodes.add(newNode);
+        newNode.start();
+    }
+
+    void removeNode(ActionEvent e) {
+        if (!nodes.isEmpty()) {
+            Node removed = nodes.remove(nodes.size() - 1);
+            edges.removeIf(edge -> edge.getFrom() == removed || edge.getTo() == removed);
+            Node.uidCounter--;
+        }
     }
 }

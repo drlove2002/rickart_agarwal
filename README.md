@@ -46,3 +46,4 @@ This is an MVP (Minimum Viable Product) under active development. Features and i
 ## Contributing
 
 Feel free to open issues or submit pull requests. Since this is rapidly evolving, please check with maintainers before starting major changes.
+

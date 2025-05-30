@@ -3,19 +3,13 @@ package com.app;
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.ActionEvent;
-import java.util.Collections;
-import java.util.List;
 
 
 public class Graph extends JPanel {
 	private static final long serialVersionUID = 1L;
-	private List<Node> nodes;
-    private List<Edge> edges;
     private SignalManager signalManager;
 
-    public Graph(List<Node> nodes, List<Edge> edges) {
-        this.nodes = nodes;
-        this.edges = edges;
+    public Graph() {
         this.signalManager = new SignalManager();
         setPreferredSize(new Dimension(800, 600));
         setBackground(Color.WHITE);
@@ -31,7 +25,7 @@ public class Graph extends JPanel {
         // 1. Draw all the edges (always gray)
         g2d.setStroke(new BasicStroke(3));
         g2d.setColor(Color.GRAY);
-        for (Edge edge : edges) {
+        for (Edge edge : Edge.all()) {
             Point p1 = edge.getFrom().getPosition();
             Point p2 = edge.getTo().getPosition();
             g2d.drawLine(p1.x, p1.y, p2.x, p2.y);
@@ -42,7 +36,7 @@ public class Graph extends JPanel {
 
         // 3. Draw the nodes (circles with ID text)
         g2d.setFont(new Font("Arial", Font.BOLD, 18));
-        for (Node node : nodes) {
+        for (Node node : Node.all()) {
             Point pos = node.getPosition();
             g2d.setColor(node.getColor());
             g2d.fillOval(pos.x - 30, pos.y - 30, 60, 60);
@@ -86,25 +80,21 @@ public class Graph extends JPanel {
         signalManager.resetCommunication(from, to);
         repaint();
     }
-    
-    public List<Node> getNodes() {
-        return Collections.unmodifiableList(nodes);
-    }
-
+   
     void addNode(ActionEvent e) {
-        Node newNode = new Node(this);
-        for (Node existing : nodes) {
-            edges.add(new Edge(existing, newNode));
+        Node newNode = Node.push(this);
+        
+        for (Node other : Node.all()) {
+        	if (other == newNode) {continue;}
+            Edge.add(other, newNode);
         }
-        nodes.add(newNode);
         newNode.start();
     }
 
     void removeNode(ActionEvent e) {
-        if (!nodes.isEmpty()) {
-            Node removed = nodes.remove(nodes.size() - 1);
-            edges.removeIf(edge -> edge.getFrom() == removed || edge.getTo() == removed);
-            Node.uidCounter--;
+        if (!Node.all().isEmpty()) {
+            Node removed = Node.pull();
+            Edge.remove(removed);
         }
     }
 }

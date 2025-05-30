@@ -2,15 +2,11 @@ package com.app;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.List;
 
 public class Main extends JFrame {
 
 	private static final long serialVersionUID = 1L;
-	private List<Node> nodes = new ArrayList<>();
-    private List<Edge> edges = new ArrayList<>();
-    private Graph graph = new Graph(nodes, edges);
+    private Graph graph = new Graph();
 
     public Main() {
         super("Graph Visualizer");

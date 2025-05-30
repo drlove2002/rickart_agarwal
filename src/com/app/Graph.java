@@ -57,7 +57,7 @@ public class Graph extends JPanel {
     // Replace activeSignals with signalManager.getActiveSignals()
     private void drawSignalArrows(Graphics2D g2d) {
         g2d.setStroke(new BasicStroke(4));
-        for (SignalInfo signal : signalManager.getActiveSignals().values()) {
+        for (SignalInfo signal : signalManager.getActiveSignals()) {
             Point from = signal.from.getPosition();
             Point to = signal.to.getPosition();
             g2d.setColor(signal.signalColor);
@@ -82,7 +82,7 @@ public class Graph extends JPanel {
     }
    
     void addNode(ActionEvent e) {
-        Node newNode = Node.push(this);
+    	Node newNode = Node.push(this, signalManager);
         
         for (Node other : Node.all()) {
         	if (other == newNode) {continue;}
